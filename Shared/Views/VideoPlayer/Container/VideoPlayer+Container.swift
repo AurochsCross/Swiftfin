@@ -309,7 +309,11 @@ extension VideoPlayer {
         // MARK: - Constants
 
         private var availableSupplementHeight: CGFloat {
-            max(0, view.bounds.height - view.safeAreaInsets.top)
+            if let tabletopFold {
+                return max(0, view.bounds.height - tabletopFold.maxY)
+            }
+
+            return max(0, view.bounds.height - view.safeAreaInsets.top)
         }
 
         private func supplementContainerOffset(
@@ -317,6 +321,11 @@ extension VideoPlayer {
         ) -> CGFloat {
             let isCompact = isCompact ?? viewState.isCompact
             let availableHeight = availableSupplementHeight
+
+            // Keep the deck toolbar visible above the supplement
+            if tabletopFold != nil {
+                return max(dismissedSupplementContainerOffset, availableHeight - tabletopToolbarHeight)
+            }
 
             if !isCompact, viewState.selectedSupplement?.presentationStyle == .expanded {
                 return availableHeight
@@ -338,6 +347,10 @@ extension VideoPlayer {
             min(availableSupplementHeight, UIDevice.isTV ? 120 : 50.0 + EdgeInsets.edgePadding * 2)
         }
 
+        private var tabletopToolbarHeight: CGFloat {
+            50 + EdgeInsets.edgePadding
+        }
+
         private let compactMinimumTranslation: CGFloat = 100.0
         private let regularMinimumTranslation: CGFloat = 50.0
 
@@ -345,11 +358,16 @@ extension VideoPlayer {
 
         private var playerCompactBottomAnchor: NSLayoutConstraint?
         private var playerRegularBottomAnchor: NSLayoutConstraint?
+        private var playerTabletopBottomAnchor: NSLayoutConstraint?
+        private var playbackControlsTopAnchor: NSLayoutConstraint?
+        private var playbackControlsTabletopTopAnchor: NSLayoutConstraint?
         private var supplementHeightAnchor: NSLayoutConstraint?
         private var supplementBottomAnchor: NSLayoutConstraint?
 
         private var centerOffset: CGFloat {
-            compactPlayerOverlap.map { max(50, $0) } ?? dismissedSupplementContainerOffset
+            guard tabletopFold == nil else { return 0 }
+
+            return compactPlayerOverlap.map { max(50, $0) } ?? dismissedSupplementContainerOffset
         }
 
         private var compactPlayerBottomOffset: CGFloat {
@@ -378,7 +396,20 @@ extension VideoPlayer {
         let viewState: ViewState
 
         private var didInitiallyAppear: Bool = false
-        private var lastSupplementLayout: (size: CGSize, safeAreaInsets: UIEdgeInsets)?
+        private var lastSupplementLayout: (size: CGSize, safeAreaInsets: UIEdgeInsets, tabletopFold: CGRect?)?
+
+        /// The fold splitting the video from the control deck, while in a tabletop pose.
+        private var tabletopFold: CGRect?
+
+        private var currentTabletopFold: CGRect? {
+            #if os(iOS)
+            guard Defaults[.VideoPlayer.tabletopLayout] else { return nil }
+
+            return view.tabletopFold
+            #else
+            return nil
+            #endif
+        }
 
         #if os(tvOS)
         let onPressEvent = OnPressEvent()
@@ -602,6 +633,10 @@ extension VideoPlayer {
 
             view.backgroundColor = .black
 
+            #if os(iOS)
+            view.addHingeLayoutTrigger()
+            #endif
+
             let isCompact = UIDevice.isPhone && view.bounds.size.isPortrait
 
             setupOnLoadViews()
@@ -635,6 +670,10 @@ extension VideoPlayer {
 
             playerCompactBottomAnchor = bottomAnchor
             playerRegularBottomAnchor = playerView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            playerTabletopBottomAnchor = playerView.bottomAnchor.constraint(
+                equalTo: view.topAnchor,
+                constant: tabletopFold?.minY ?? 0
+            )
 
             NSLayoutConstraint.activate([
                 playerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -643,7 +682,8 @@ extension VideoPlayer {
             ])
 
             playerCompactBottomAnchor?.isActive = viewState.isCompact
-            playerRegularBottomAnchor?.isActive = !viewState.isCompact
+            playerRegularBottomAnchor?.isActive = !viewState.isCompact && tabletopFold == nil
+            playerTabletopBottomAnchor?.isActive = tabletopFold != nil
         }
 
         private func setupOnLoadViews() {
@@ -699,10 +739,14 @@ extension VideoPlayer {
             #endif
             playbackControlsBottomAnchor.priority = .defaultHigh
 
+            let playbackControlsTopAnchor = playbackControlsView.topAnchor.constraint(equalTo: view.topAnchor)
+            self.playbackControlsTopAnchor = playbackControlsTopAnchor
+            playbackControlsTabletopTopAnchor = playbackControlsView.topAnchor.constraint(equalTo: view.topAnchor)
+
             NSLayoutConstraint.activate([
                 playbackControlsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 playbackControlsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                playbackControlsView.topAnchor.constraint(equalTo: view.topAnchor),
+                playbackControlsTopAnchor,
                 playbackControlsBottomAnchor,
                 playbackControlsView.bottomAnchor.constraint(
                     lessThanOrEqualTo: overlayActionsView.topAnchor,
@@ -744,33 +788,64 @@ extension VideoPlayer {
         override func viewDidLayoutSubviews() {
             super.viewDidLayoutSubviews()
 
+            #if os(iOS)
+            let isOnFoldingDisplay = view.isOnFoldingDisplay
+            if viewState.isOnFoldingDisplay != isOnFoldingDisplay {
+                viewState.isOnFoldingDisplay = isOnFoldingDisplay
+            }
+            #endif
+
             let size = view.bounds.size
             let safeAreaInsets = view.safeAreaInsets
+            let tabletopFold = currentTabletopFold
             guard playerCompactBottomAnchor != nil,
-                  lastSupplementLayout?.size != size || lastSupplementLayout?.safeAreaInsets != safeAreaInsets
+                  lastSupplementLayout?.size != size ||
+                  lastSupplementLayout?.safeAreaInsets != safeAreaInsets ||
+                  lastSupplementLayout?.tabletopFold != tabletopFold
             else { return }
 
-            lastSupplementLayout = (size, safeAreaInsets)
+            lastSupplementLayout = (size, safeAreaInsets, tabletopFold)
             cancelSupplementPan()
-            adjustConstraints(isCompact: UIDevice.isPhone && size.isPortrait)
+            adjustConstraints(
+                isCompact: tabletopFold == nil && UIDevice.isPhone && size.isPortrait,
+                tabletopFold: tabletopFold
+            )
         }
 
-        private func adjustConstraints(isCompact: Bool) {
+        private func adjustConstraints(isCompact: Bool, tabletopFold: CGRect?) {
+            self.tabletopFold = tabletopFold
             viewState.isCompact = isCompact
+            viewState.isTabletop = tabletopFold != nil
 
             guard let supplementBottomAnchor,
                   let supplementHeightAnchor,
-                  let playerCompactBottomAnchor
+                  let playerCompactBottomAnchor,
+                  let playerRegularBottomAnchor,
+                  let playerTabletopBottomAnchor,
+                  let playbackControlsTopAnchor,
+                  let playbackControlsTabletopTopAnchor
             else { return }
 
             let presentedOffset = supplementContainerOffset(isCompact: isCompact)
 
-            if isCompact {
-                playerRegularBottomAnchor?.isActive = false
-                playerCompactBottomAnchor.isActive = true
+            // Deactivate before activating to avoid transient conflicts
+            NSLayoutConstraint.deactivate([
+                playerCompactBottomAnchor,
+                playerRegularBottomAnchor,
+                playerTabletopBottomAnchor,
+                playbackControlsTopAnchor,
+                playbackControlsTabletopTopAnchor,
+            ])
+
+            if let tabletopFold {
+                playerTabletopBottomAnchor.constant = tabletopFold.minY
+                playbackControlsTabletopTopAnchor.constant = tabletopFold.maxY
+                NSLayoutConstraint.activate([playerTabletopBottomAnchor, playbackControlsTabletopTopAnchor])
             } else {
-                playerCompactBottomAnchor.isActive = false
-                playerRegularBottomAnchor?.isActive = true
+                NSLayoutConstraint.activate([
+                    isCompact ? playerCompactBottomAnchor : playerRegularBottomAnchor,
+                    playbackControlsTopAnchor,
+                ])
             }
 
             supplementBottomAnchor.constant = viewState

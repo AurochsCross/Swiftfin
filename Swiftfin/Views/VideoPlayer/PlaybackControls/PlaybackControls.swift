@@ -35,9 +35,9 @@ extension VideoPlayer {
             viewState.isScrubbing
         }
 
-        // MARK: body
+        // MARK: overlay
 
-        var body: some View {
+        private var overlayLayout: some View {
             ZStack {
                 VStack {
                     Toolbar()
@@ -78,6 +78,48 @@ extension VideoPlayer {
                 PlaybackButtons()
                     .isVisible(viewState.visibleElements.contains(.playbackButtons))
                     .enabled(viewState.visibleElements.contains(.playbackButtons))
+            }
+        }
+
+        // MARK: tabletop
+
+        /// A control deck below the fold, with the video above it.
+        private var tabletopLayout: some View {
+            VStack(spacing: 0) {
+                Toolbar()
+                    .frame(height: 50)
+                    .isVisible(viewState.visibleElements.contains(.toolbar))
+                    .enabled(viewState.visibleElements.contains(.toolbar))
+                    .padding(.top, EdgeInsets.edgePadding)
+
+                Spacer(minLength: 0)
+                    .allowsHitTesting(false)
+
+                PlaybackButtons()
+                    .isVisible(viewState.visibleElements.contains(.playbackButtons))
+                    .enabled(viewState.visibleElements.contains(.playbackButtons))
+
+                Spacer(minLength: 0)
+                    .allowsHitTesting(false)
+
+                PlaybackProgress()
+                    .isVisible(viewState.isPresentingProgress)
+                    .enabled(viewState.isPresentingProgress)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.leading, safeAreaInsets.leading)
+            .padding(.trailing, safeAreaInsets.trailing)
+        }
+
+        // MARK: body
+
+        var body: some View {
+            Group {
+                if viewState.isTabletop {
+                    tabletopLayout
+                } else {
+                    overlayLayout
+                }
             }
             .modifier(VideoPlayer.KeyCommandsModifier())
             .animation(.linear(duration: 0.1), value: isScrubbing)

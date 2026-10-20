@@ -152,11 +152,29 @@ extension VideoPlayer {
                     setInteraction(.pan, active: false)
                     setInteraction(.pinch, active: false)
                     hideControls()
+                } else if isTabletop {
+                    showControls()
                 }
             }
         }
 
         var isCompact: Bool = false
+
+        /// On a display with a fold, such as the iPhone Duo inner display, where upside down is a natural orientation.
+        var isOnFoldingDisplay: Bool = false
+
+        /// Video above the fold and a persistent control deck below it.
+        var isTabletop: Bool = false {
+            didSet {
+                guard isTabletop != oldValue else { return }
+
+                if isTabletop, presentation == .hidden || presentation == .progress {
+                    transition(to: .controls)
+                } else {
+                    refreshAutoDismiss()
+                }
+            }
+        }
 
         var isScrubbing: Bool = false {
             didSet { refreshAutoDismiss() }
@@ -230,7 +248,7 @@ extension VideoPlayer {
         }
 
         var isPresentingFullScreenSupplement: Bool {
-            !isCompact && selectedSupplement?.presentationStyle == .expanded
+            !isCompact && !isTabletop && selectedSupplement?.presentationStyle == .expanded
         }
 
         var isPresentingControls: Bool {
@@ -269,7 +287,10 @@ extension VideoPlayer {
                 return overlayActions.isEmpty ? [.progress] : [.progress, .overlayActions]
 
             case .controls:
-                var elements: Set<Element> = [.progress, .toolbar, .playbackButtons, .dimming]
+                var elements: Set<Element> = [.progress, .toolbar, .playbackButtons]
+                if !isTabletop {
+                    elements.insert(.dimming)
+                }
                 if supplements.isNotEmpty {
                     elements.insert(.supplements)
                 }
@@ -278,6 +299,11 @@ extension VideoPlayer {
             case let .supplement(_, showsPlaybackButtons):
                 if UIDevice.isTV {
                     return [.supplements, .dimming]
+                }
+
+                // The supplement covers the deck, leaving the video undimmed above the fold
+                if isTabletop {
+                    return [.toolbar, .supplements]
                 }
 
                 if isCompact {
@@ -519,6 +545,9 @@ extension VideoPlayer {
         }
 
         func hideControls() {
+            // The tabletop deck stays visible, except while gestures are locked
+            guard !isTabletop || isGestureLocked else { return }
+
             transition(to: .hidden)
         }
 
@@ -547,6 +576,7 @@ extension VideoPlayer {
 
         private var canAutoDismiss: Bool {
             guard presentation != .hidden,
+                  !isTabletop,
                   !isScrubbing,
                   !isPresentingSupplement,
                   interactions.isEmpty,

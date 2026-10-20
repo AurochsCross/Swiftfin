@@ -24,6 +24,11 @@ struct VideoPlayerSettingsView: View {
     @Default(.VideoPlayer.videoPlayerType)
     private var videoPlayerType
 
+    #if os(iOS)
+    @Default(.VideoPlayer.tabletopLayout)
+    private var tabletopLayout
+    #endif
+
     // MARK: - Button Defaults
 
     @Default(.VideoPlayer.jumpBackwardInterval)
@@ -91,6 +96,8 @@ struct VideoPlayerSettingsView: View {
 
             #if os(iOS)
             gestureSettings
+
+            tabletopSettings
             #endif
 
             buttonSettings
@@ -165,6 +172,17 @@ struct VideoPlayerSettingsView: View {
             ChevronButton(L10n.gestures) {
                 router.route(to: .gestureSettings)
             }
+        }
+    }
+
+    // MARK: - Tabletop Settings
+
+    @ViewBuilder
+    private var tabletopSettings: some View {
+        Section {
+            Toggle(L10n.tabletopLayout, isOn: $tabletopLayout)
+        } footer: {
+            Text(L10n.tabletopLayoutDescription)
         }
     }
     #endif

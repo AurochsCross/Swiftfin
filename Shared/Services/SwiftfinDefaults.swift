@@ -297,6 +297,10 @@ extension Defaults.Keys {
             )
         }
 
+        static var tabletopLayout: Key<Bool> {
+            UserKey("videoPlayerTabletopLayout", default: true)
+        }
+
         static var videoPlayerType: Key<VideoPlayerType> {
             UserKey("videoPlayerType", default: .vlc)
         }

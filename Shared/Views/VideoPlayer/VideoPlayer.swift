@@ -64,7 +64,8 @@ struct VideoPlayer: View {
             manager.proxy = proxy
             manager.start()
         }
-        .prefersStatusBarHidden(!viewState.isPresentingControls)
+        // The tabletop deck is always presented, so it never shows the status bar
+        .prefersStatusBarHidden(viewState.isTabletop || !viewState.isPresentingControls)
         #if os(iOS)
         .onChange(of: viewState.isScrubbing) {
             if viewState.isScrubbing {
@@ -118,7 +119,7 @@ struct VideoPlayer: View {
         }
         .environment(\.safeAreaInsets, safeAreaInsets)
         .colorScheme(.dark) // use over `preferredColorScheme(.dark)` to not have destination change
-        .supportedOrientations(.allButUpsideDown)
+        .supportedOrientations(viewState.isOnFoldingDisplay ? .all : .allButUpsideDown)
         .ignoresSafeArea()
         .persistentSystemOverlays(.hidden)
         .toolbar(.hidden, for: .navigationBar)

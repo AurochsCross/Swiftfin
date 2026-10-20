@@ -1784,6 +1784,10 @@ internal enum L10n {
   internal static let system = L10n.tr("Localizable", "system", fallback: "System")
   /// Tab bar
   internal static let tabBar = L10n.tr("Localizable", "tabBar", fallback: "Tab bar")
+  /// Tabletop layout
+  internal static let tabletopLayout = L10n.tr("Localizable", "tabletopLayout", fallback: "Tabletop layout")
+  /// Shows the video above the fold and playback controls below it when your iPhone is partially folded on a surface.
+  internal static let tabletopLayoutDescription = L10n.tr("Localizable", "tabletopLayoutDescription", fallback: "Shows the video above the fold and playback controls below it when your iPhone is partially folded on a surface.")
   /// Tagline
   internal static let tagline = L10n.tr("Localizable", "tagline", fallback: "Tagline")
   /// Taglines

@@ -21,6 +21,8 @@ struct NotchMeasurement: Equatable, Sendable {
     let systemInsets: EdgeInsets
     /// Private cutout insets, or systemInsets when the private API is unavailable.
     let insets: EdgeInsets
+    /// Whether the view is on a display with a fold, such as the iPhone Duo inner display.
+    var isOnFoldingDisplay: Bool = false
 }
 
 struct NotchReader<Content: View>: View {
@@ -75,6 +77,7 @@ enum NotchDeviceReader {
             systemInsets: system,
             insets: system
         )
+        fallback.isOnFoldingDisplay = view.isOnFoldingDisplay
         let screen = window.screen
 
         let displayFrame = view.convert(bounds, to: screen.coordinateSpace)
@@ -101,7 +104,8 @@ enum NotchDeviceReader {
             displayCornerRadius: fallback.displayCornerRadius,
             cutout: rect,
             systemInsets: system,
-            insets: insets
+            insets: insets,
+            isOnFoldingDisplay: fallback.isOnFoldingDisplay
         )
     }
 
