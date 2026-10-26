@@ -138,9 +138,15 @@ extension VideoPlayer {
             NotchReader { notchMeasurement in
                 GeometryReader { geometry in
                     let usesSystemSafeArea = viewState.isCompact && notchMeasurement?.cutout == nil
-                    let fitInsets = usesSystemSafeArea
-                        ? (notchMeasurement?.systemInsets ?? geometry.safeAreaInsets)
-                        : VideoLayout.padding(insets: notchMeasurement?.insets ?? .init(), behavior: .fit)
+                    // A folding display reserves its camera area only while the status bar
+                    // shows with the controls, so video stays edge to edge to avoid moving.
+                    let fitInsets = if notchMeasurement?.isOnFoldingDisplay == true {
+                        EdgeInsets()
+                    } else if usesSystemSafeArea {
+                        notchMeasurement?.systemInsets ?? geometry.safeAreaInsets
+                    } else {
+                        VideoLayout.padding(insets: notchMeasurement?.insets ?? .init(), behavior: .fit)
+                    }
                     let zoomGeometry = VideoZoom.Geometry(
                         videoSize: videoSize.value,
                         viewportSize: geometry.size,
