@@ -109,6 +109,24 @@ extension VideoPlayer {
                 .overlay {
                         VideoZoomBorder(isVisible: viewState.zoom.isFillBorderPresented)
                     }
+                    .overlay {
+                        // The control deck only covers the bottom half, so the video above the fold takes taps too
+                        if viewState.isTabletop {
+                            GestureView()
+                                .environment(
+                                    \.tapGestureAction,
+                                    .init(
+                                        action: {
+                                            viewState.containerView?.handleTapGesture(
+                                                location: $0,
+                                                unitPoint: $1,
+                                                count: $2
+                                            )
+                                        }
+                                    )
+                                )
+                        }
+                    }
                 #endif
             }
         }
@@ -401,6 +419,10 @@ extension VideoPlayer {
         /// The fold splitting the video from the control deck, while in a tabletop pose.
         private var tabletopFold: CGRect?
 
+        #if os(iOS)
+        private var sceneGeometryObservation: NSKeyValueObservation?
+        #endif
+
         private var currentTabletopFold: CGRect? {
             #if os(iOS)
             guard Defaults[.VideoPlayer.tabletopLayout] else { return nil }
@@ -618,6 +640,16 @@ extension VideoPlayer {
                 initialHitBlockView.removeFromSuperview()
                 didInitiallyAppear = true
             }
+
+            #if os(iOS)
+            // A flip changes geometry without changing view size or safe insets,
+            // and the fold only settles into its new position after the rotation.
+            sceneGeometryObservation = view.window?.windowScene?.observe(\.effectiveGeometry, options: [.new]) { [weak self] _, _ in
+                DispatchQueue.main.async {
+                    self?.view.setNeedsLayout()
+                }
+            }
+            #endif
 
             #if os(tvOS)
             Task { @MainActor in
@@ -857,6 +889,15 @@ extension VideoPlayer {
         }
 
         #if os(iOS)
+        override func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
+            super.viewWillTransition(to: size, with: coordinator)
+
+            // Mid-rotation layout passes can read a stale fold, so check again once settled
+            coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+                self?.view.setNeedsLayout()
+            }
+        }
+
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
             viewState.cancelTapGesture()

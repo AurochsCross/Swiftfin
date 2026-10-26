@@ -152,8 +152,6 @@ extension VideoPlayer {
                     setInteraction(.pan, active: false)
                     setInteraction(.pinch, active: false)
                     hideControls()
-                } else if isTabletop {
-                    showControls()
                 }
             }
         }
@@ -163,7 +161,7 @@ extension VideoPlayer {
         /// On a display with a fold, such as the iPhone Duo inner display, where upside down is a natural orientation.
         var isOnFoldingDisplay: Bool = false
 
-        /// Video above the fold and a persistent control deck below it.
+        /// Video above the fold and a control deck below it, which stays until tapped away.
         var isTabletop: Bool = false {
             didSet {
                 guard isTabletop != oldValue else { return }
@@ -545,9 +543,6 @@ extension VideoPlayer {
         }
 
         func hideControls() {
-            // The tabletop deck stays visible, except while gestures are locked
-            guard !isTabletop || isGestureLocked else { return }
-
             transition(to: .hidden)
         }
 
